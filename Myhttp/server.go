@@ -14,7 +14,6 @@ type Server struct {
 	*http.Server
 	*MyMux
 }
-
 type Method string
 type Path string
 type MyMux struct {
@@ -52,13 +51,17 @@ func (s *Server) setRouter(path string, method Method, handler http.HandlerFunc)
 }
 
 func useRouter(m *MyMux, r *http.Request) http.Handler {
+	log.Println("connect:", r.Method, r.URL.Path)
+
 	if m.method[Method(r.Method)] == nil {
 		return nil
 	}
 
 	if m.method[Method(r.Method)][Path(r.URL.Path)] == nil {
+		log.Println("not found", r.Method, ":", r.URL.Path)
 		return nil
 	}
+
 	return m.method[Method(r.Method)][Path(r.URL.Path)].handler
 }
 
@@ -79,7 +82,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	handler.ServeHTTP(w, r)
 }
 
-func (s *Server) Start() {
+func (s *Server)  Start() {
 	go func() {
 		if err := http.ListenAndServe(s.Addr, s); err != http.ErrServerClosed {
 			log.Fatalf("ListenAndServe(): %v", err)
@@ -96,10 +99,12 @@ func (s *Server) Stop() error {
 }
 
 func (s *Server) Get(path string, handler http.HandlerFunc) {
+	log.Println("Get:", path)
 	s.setRouter(path, http.MethodGet, handler)
 }
 
 func (s *Server) Post(path string, handler http.HandlerFunc) {
+	log.Println("Post:", path)
 	s.setRouter(path, http.MethodPost, handler)
 }
 
