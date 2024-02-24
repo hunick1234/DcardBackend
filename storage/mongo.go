@@ -17,15 +17,17 @@ const (
 type MongoDB struct {
 	DB             *mongo.Database
 	Client         *mongo.Client
+	Options        *options.ClientOptions
 	CollectionName string
+	DBNmae         string
 }
 
-var dbConnections map[string]*MongoDB
+var dbConnections map[string]Storager
 var mu sync.Mutex
 
 func init() {
-	dbConnections = make(map[string]*MongoDB, 10)
-	//var _ Storage = (*MongoDB)(nil)
+	dbConnections = make(map[string]Storager, 10)
+	var _ Storager = (*MongoDB)(nil)
 }
 
 func NewMongoDB() *MongoDB {
@@ -33,10 +35,12 @@ func NewMongoDB() *MongoDB {
 		Client:         nil,
 		DB:             nil,
 		CollectionName: "",
+		DBNmae:         "",
+		Options:        options.Client().ApplyURI(MongoAddress),
 	}
 }
 
-func Connect(opts *options.ClientOptions, dbName string) (*MongoDB, error) {
+func connect(opts *options.ClientOptions, dbName string) (Storager, error) {
 	var err error
 	mu.Lock()
 	defer mu.Unlock()
@@ -52,6 +56,8 @@ func Connect(opts *options.ClientOptions, dbName string) (*MongoDB, error) {
 	dbConnections[dbName] = &MongoDB{
 		Client:         client,
 		DB:             db,
+		Options:        opts,
+		DBNmae:         dbName,
 		CollectionName: "",
 	}
 
@@ -75,6 +81,21 @@ func connectToMongo(opts *options.ClientOptions, dbName string) (*mongo.Client, 
 	return client, db, nil
 }
 
-func (m *MongoDB) Collection() error {
+func (m *MongoDB) Connect() (Storager, error) {
+	storage, err := connect(m.Options, m.DBNmae)
+	if err != nil {
+		return nil, err
+	}
+	return storage, nil
+}
+
+// implement Storager interface
+func (m *MongoDB) Disconnect() error {
+	m.Client.Disconnect(context.Background())
 	return nil
+}
+
+func (m *MongoDB) GetCollection(collection string) (*mongo.Collection, error) {
+	coll := m.DB.Collection(collection)
+	return coll, nil
 }

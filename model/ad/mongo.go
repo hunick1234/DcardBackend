@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/hunick1234/DcardBackend/model"
@@ -13,11 +14,14 @@ import (
 )
 
 var AdService *adService
-var collectionName = "ad"
-var databaseName = "dcard"
+
+const collectionName string = "ad"
+const databaseName string = "dcard"
+
+var syncOnce sync.Once
 
 type adService struct {
-	DbClient *storage.MongoDB
+	DbClient storage.Storager
 }
 
 func init() {
@@ -26,22 +30,28 @@ func init() {
 	AdService = DeafultAdService()
 }
 
-func NewAdService(dbClient *storage.MongoDB) *adService {
+func NewAdService(dbClient storage.Storager) *adService {
 	return &adService{
 		DbClient: dbClient,
 	}
 }
 
 func DeafultAdService() *adService {
-	dbClient, err := storage.Connect(options.Client().ApplyURI(storage.MongoAddress), databaseName)
-	dbClient.CollectionName = collectionName
-	if err != nil {
-		log.Fatal(err)
-	}
+	syncOnce.Do(func() {
+		deafult := &storage.MongoDB{
+			Client:  nil,
+			DB:      nil,
+			Options: options.Client().ApplyURI(storage.MongoAddress),
+			DBNmae:  databaseName,
+		}
+		storager, err := deafult.Connect()
+		if err != nil {
+			log.Fatal(err)
+		}
+		AdService = NewAdService(storager)
+	})
 
-	return &adService{
-		DbClient: dbClient,
-	}
+	return AdService
 }
 
 // findByFilter implements model.Storage.
@@ -50,8 +60,11 @@ func (service *adService) FindByFilter(ctx context.Context, adQuery AdQuery) ([]
 		return nil, fmt.Errorf("check you DB connection, it's nil")
 	}
 	start := time.Now()
-	fmt.Println("Connected to MongoDB!")
-	collection := service.DbClient.DB.Collection(service.DbClient.CollectionName)
+	collection, err := service.DbClient.GetCollection(collectionName)
+	if err != nil {
+		return nil, err
+	}
+
 	// ESR
 	var filter bson.D = bson.D{}
 
@@ -124,7 +137,11 @@ func (service *adService) FindByFilter(ctx context.Context, adQuery AdQuery) ([]
 func (a *adService) Store(ad *AD) error {
 	ad.Timestamp = time.Now().Unix()
 
-	_, err := a.DbClient.DB.Collection(a.DbClient.CollectionName).InsertOne(context.Background(), ad)
+	collection, err := a.DbClient.GetCollection(collectionName)
+	if err != nil {
+		return err
+	}
+	_, err = collection.InsertOne(context.Background(), ad)
 	if err != nil {
 		return err
 	}
