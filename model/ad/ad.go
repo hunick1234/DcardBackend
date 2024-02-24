@@ -167,30 +167,15 @@ func (conditions *Conditions) isValidAge() bool {
 }
 
 func (conditions *Conditions) isValidGender() bool {
-	for _, v := range conditions.Gender {
-		if validation.Gender[v] {
-			return false
-		}
-	}
-	return true
+	return checkEnumParama(conditions.Gender, validation.Gender)
 }
 
 func (conditions *Conditions) isValidCountry() bool {
-	for _, v := range conditions.Country {
-		if !validation.ISO3166[v] {
-			return false
-		}
-	}
-	return true
+	return checkEnumParama(conditions.Country, validation.ISO3166)
 }
 
 func (conditions *Conditions) isValidPlatform() bool {
-	for _, v := range conditions.Platform {
-		if validation.Plateform[v] {
-			return false
-		}
-	}
-	return true
+	return checkEnumParama(conditions.Platform, validation.Plateform)
 }
 
 func (query *AdQuery) IsValidAdQuery() bool {
@@ -222,26 +207,20 @@ func (query *AdQuery) isValidAge() bool {
 }
 
 func (query *AdQuery) isValidGender() bool {
-	for _, v := range query.Gender {
-		if validation.Gender[v] {
-			return false
-		}
-	}
-	return true
+	return checkEnumParama(query.Gender, validation.Gender)
 }
 
 func (query *AdQuery) isValidCountry() bool {
-	for _, v := range query.Country {
-		if !validation.ISO3166[v] {
-			return false
-		}
-	}
-	return true
+	return checkEnumParama(query.Country, validation.ISO3166)
 }
 
 func (query *AdQuery) isValidPlatform() bool {
-	for _, v := range query.Platform {
-		if validation.Plateform[v] {
+	return checkEnumParama(query.Platform, validation.Plateform)
+}
+
+func checkEnumParama(enum []string, validator map[string]bool) bool {
+	for _, v := range enum {
+		if !validator[v] {
 			return false
 		}
 	}
