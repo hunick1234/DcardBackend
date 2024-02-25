@@ -4,8 +4,10 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"net/http/pprof"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -26,8 +28,22 @@ type Router struct {
 	handler http.HandlerFunc
 }
 
-func NewServer() Server {
-	return Server{
+var server *Server
+
+func init() {
+	server = NewServer()
+	server.setRouter("/debug/pprof/", http.MethodGet, pprof.Index)
+	server.setRouter("/debug/pprof/cmdline", http.MethodGet, pprof.Cmdline)
+	server.setRouter("/debug/pprof/profile", http.MethodGet, pprof.Profile)
+	server.setRouter("/debug/pprof/symbol", http.MethodGet, pprof.Symbol)
+	server.setRouter("/debug/pprof/trace", http.MethodGet, pprof.Trace)
+}
+
+func NewServer() *Server {
+	if server != nil {
+		return server
+	}
+	return &Server{
 		Server: &http.Server{
 			Addr: ":8080",
 		},
@@ -73,6 +89,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
+	if name, found := strings.CutPrefix(r.URL.Path, "/debug/pprof/"); found {
+		if name != "" && !(name == "cmdline" || name == "profile" || name == "symbol" || name == "trace") {
+			pprof.Index(w, r)
+			return
+		}
+	}
 
 	handler := useRouter(s.MyMux, r)
 	if handler == nil {
@@ -82,13 +104,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	handler.ServeHTTP(w, r)
 }
 
-func (s *Server)  Start() {
+func (s *Server) Start() {
 	go func() {
 		if err := http.ListenAndServe(s.Addr, s); err != http.ErrServerClosed {
 			log.Fatalf("ListenAndServe(): %v", err)
 		}
 	}()
-
 	log.Printf("Server is running on port %s", s.Addr)
 	waitSignal()
 	greatFullShutdown(s)
