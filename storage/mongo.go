@@ -15,8 +15,11 @@ const (
 )
 
 type MongoDB struct {
-	DB             *mongo.Database
-	Client         *mongo.Client
+	DB     *mongo.Database
+	Client *mongo.Client
+}
+
+type MongoCfg struct {
 	Options        *options.ClientOptions
 	CollectionName string
 	DBNmae         string
@@ -32,11 +35,8 @@ func init() {
 
 func NewMongoDB() *MongoDB {
 	return &MongoDB{
-		Client:         nil,
-		DB:             nil,
-		CollectionName: "",
-		DBNmae:         "",
-		Options:        options.Client().ApplyURI(MongoAddress),
+		Client: nil,
+		DB:     nil,
 	}
 }
 
@@ -54,11 +54,8 @@ func connect(opts *options.ClientOptions, dbName string) (Storager, error) {
 		return nil, err
 	}
 	dbConnections[dbName] = &MongoDB{
-		Client:         client,
-		DB:             db,
-		Options:        opts,
-		DBNmae:         dbName,
-		CollectionName: "",
+		Client: client,
+		DB:     db,
 	}
 
 	return dbConnections[dbName], nil
@@ -81,8 +78,8 @@ func connectToMongo(opts *options.ClientOptions, dbName string) (*mongo.Client, 
 	return client, db, nil
 }
 
-func (m *MongoDB) Connect() (Storager, error) {
-	storage, err := connect(m.Options, m.DBNmae)
+func (mCfg *MongoCfg) Connect() (Storager, error) {
+	storage, err := connect(mCfg.Options, mCfg.DBNmae)
 	if err != nil {
 		return nil, err
 	}
