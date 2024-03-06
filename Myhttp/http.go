@@ -16,6 +16,8 @@ type Server struct {
 }
 type Method string
 type Path string
+
+
 type MyMux struct {
 	method map[Method]map[Path]*Router
 }
@@ -26,8 +28,8 @@ type Router struct {
 	handler http.HandlerFunc
 }
 
-func NewServer() Server {
-	return Server{
+func NewServer() *Server {
+	return &Server{
 		Server: &http.Server{
 			Addr: ":8080",
 		},
@@ -79,10 +81,11 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
+
 	handler.ServeHTTP(w, r)
 }
 
-func (s *Server)  Start() {
+func (s *Server) Start() {
 	go func() {
 		if err := http.ListenAndServe(s.Addr, s); err != http.ErrServerClosed {
 			log.Fatalf("ListenAndServe(): %v", err)
