@@ -2,9 +2,9 @@ package storage
 
 import (
 	"context"
-	"sync"
 	"time"
 
+	"github.com/hunick1234/DcardBackend/config"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
@@ -19,17 +19,8 @@ type MongoDB struct {
 	Client *mongo.Client
 }
 
-type MongoCfg struct {
-	Options        *options.ClientOptions
-	CollectionName string
-	DBNmae         string
-}
-
-var dbConnections map[string]Storager
-var mu sync.Mutex
-
 func init() {
-	dbConnections = make(map[string]Storager, 10)
+
 	var _ Storager = (*MongoDB)(nil)
 }
 
@@ -40,25 +31,18 @@ func NewMongoDB() *MongoDB {
 	}
 }
 
-func connect(opts *options.ClientOptions, dbName string) (Storager, error) {
-	var err error
-	mu.Lock()
-	defer mu.Unlock()
-	//connect to db at first time
-	if condition, ok := dbConnections[dbName]; ok {
-		return condition, nil
-	}
-
+func NewMongoConn(cfg *config.MongoCfg) (Storager, error) {
+	opts := options.Client().ApplyURI(cfg.URI)
+	dbName := cfg.DB
 	client, db, err := connectToMongo(opts, dbName)
 	if err != nil {
 		return nil, err
 	}
-	dbConnections[dbName] = &MongoDB{
+	return &MongoDB{
 		Client: client,
 		DB:     db,
-	}
+	}, nil
 
-	return dbConnections[dbName], nil
 }
 
 func connectToMongo(opts *options.ClientOptions, dbName string) (*mongo.Client, *mongo.Database, error) {
@@ -78,14 +62,6 @@ func connectToMongo(opts *options.ClientOptions, dbName string) (*mongo.Client, 
 	return client, db, nil
 }
 
-func (mCfg *MongoCfg) Connect() (Storager, error) {
-	storage, err := connect(mCfg.Options, mCfg.DBNmae)
-	if err != nil {
-		return nil, err
-	}
-	return storage, nil
-}
-
 // implement Storager interface
 func (m *MongoDB) Disconnect() error {
 	m.Client.Disconnect(context.Background())
@@ -95,4 +71,18 @@ func (m *MongoDB) Disconnect() error {
 func (m *MongoDB) GetCollection(collection string) (*mongo.Collection, error) {
 	coll := m.DB.Collection(collection)
 	return coll, nil
+}
+
+func (m *MongoDB) Ping() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	err := m.Client.Ping(ctx, readpref.Primary())
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (m *MongoDB) GetDBName() string {
+	return m.DB.Name()
 }
