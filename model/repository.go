@@ -2,9 +2,16 @@ package model
 
 import (
 	"context"
+
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
-type Storage[T any, Q any] interface {
+type Storager[T any, Q any] interface {
 	Store(*T) error
-	FindByFilter(context.Context, Q) ([]*T, error)
+	FindByFilter(context.Context, *Q) (*[]T, error)
+	Aggregate(context.Context, Filter, any) error
+}
+
+type Filter interface {
+	Pipeline() mongo.Pipeline
 }

@@ -6,6 +6,7 @@ import (
 
 	"github.com/hunick1234/DcardBackend/validation"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 type AD struct {
@@ -98,10 +99,10 @@ func NewConditions() Conditions {
 	}
 }
 
-func NewAdQuery() AdQuery {
+func DefaultAdQuery() AdQuery {
 	return AdQuery{
 		Offset:   0,
-		Limit:    10,
+		Limit:    5,
 		Age:      0,
 		Gender:   []string{},
 		Country:  []string{},
@@ -128,7 +129,6 @@ func (ad *AD) isValidStartAt() bool {
 }
 
 func (ad *AD) isValidEndAt() bool {
-
 	endAtTime, err := time.Parse(time.RFC3339, ad.EndAt)
 	if err != nil {
 		return false
@@ -216,6 +216,66 @@ func (query *AdQuery) isValidCountry() bool {
 
 func (query *AdQuery) isValidPlatform() bool {
 	return checkEnumParama(query.Platform, validation.Plateform)
+}
+
+func (adQuery *AdQuery) Pipeline() mongo.Pipeline {
+	var pipeline mongo.Pipeline
+
+	if len(adQuery.Gender) > 0 {
+		pipeline = append(pipeline, bson.D{
+			{"$match", bson.D{
+				{"$or", bson.A{
+					bson.D{{"conditions.gender", bson.D{{"$in", adQuery.Gender}}}},
+					bson.D{{"conditions.gender", bson.D{{"$eq", []string{}}}}},
+				}},
+			}},
+		})
+	}
+
+	if len(adQuery.Platform) > 0 {
+		pipeline = append(pipeline, bson.D{
+			{"$match", bson.D{
+				{"$or", bson.A{
+					bson.D{{"conditions.platform", bson.D{{"$in", adQuery.Platform}}}},
+					bson.D{{"conditions.platform", bson.D{{"$eq", []string{}}}}},
+				}},
+			}},
+		})
+	}
+
+	if len(adQuery.Country) > 0 {
+		pipeline = append(pipeline, bson.D{
+			{"$match", bson.D{
+				{"$or", bson.A{
+					bson.D{{"conditions.country", bson.D{{"$in", adQuery.Country}}}},
+					bson.D{{"conditions.country", bson.D{{"$eq", []string{}}}}},
+				}},
+			}},
+		})
+	}
+
+	if adQuery.Age > 0 {
+		pipeline = append(pipeline, bson.D{
+			{"$match", bson.D{
+				{"$and", bson.A{
+					bson.D{{"conditions.age_start", bson.D{{"$lte", adQuery.Age}}}},
+					bson.D{{"conditions.age_end", bson.D{{"$gte", adQuery.Age}}}},
+				}},
+			}},
+		})
+	}
+
+	if adQuery.Offset > 0 {
+		pipeline = append(pipeline, bson.D{{"$skip", adQuery.Offset}})
+	}
+
+	if adQuery.Limit > 0 {
+		pipeline = append(pipeline, bson.D{{"$limit", adQuery.Limit}})
+	}
+
+	sort := bson.D{{"end_at", -1}}
+	pipeline = append(pipeline, bson.D{{"$sort", sort}})
+	return pipeline
 }
 
 func checkEnumParama(enum []string, validator map[string]bool) bool {
