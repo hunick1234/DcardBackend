@@ -16,26 +16,26 @@ import (
 const collectionName string = "ad"
 const databaseName string = "dcard"
 
-var AdService *adService
+var AdRepo *AdRepository
 var syncOnce sync.Once
 
-type adService struct {
+type AdRepository struct {
 	dbClient storage.Storager
 }
 
 func init() {
 	// implementation of init method
-	var _ model.Storager[AD, AdQuery] = (*adService)(nil)
-	AdService = DeafultAdService()
+	var _ model.Repository[AD, AdQuery] = (*AdRepository)(nil)
+	AdRepo = DeafultAdRepository()
 }
 
-func NewAdService(dbClient storage.Storager) *adService {
-	return &adService{
+func NewAdRepository(dbClient storage.Storager) *AdRepository {
+	return &AdRepository{
 		dbClient: dbClient,
 	}
 }
 
-func DeafultAdService() *adService {
+func DeafultAdRepository() *AdRepository {
 	syncOnce.Do(func() {
 		deafult := &config.MongoCfg{
 			URI: "mongodb://localhost:27017",
@@ -45,26 +45,26 @@ func DeafultAdService() *adService {
 		if err != nil {
 			log.Fatal(err)
 		}
-		AdService = NewAdService(storager)
+		AdRepo = NewAdRepository(storager)
 	})
 
-	return AdService
+	return AdRepo
 }
 
 // findByFilter implements model.Storager.
-func (service *adService) FindByFilter(ctx context.Context, adQuery *AdQuery) (*[]AD, error) {
+func (adRepo *AdRepository) FindByFilter(ctx context.Context, adQuery *AdQuery) (*[]AD, error) {
 
-	if service.dbClient == nil {
+	if adRepo.dbClient == nil {
 		return nil, fmt.Errorf("check you DB connection, it's nil")
 	}
 	start := time.Now()
-	collection, err := service.dbClient.GetCollection(collectionName)
+	collection, err := adRepo.dbClient.GetCollection(collectionName)
 	if err != nil {
 		return nil, err
 	}
 
 	filter := adQuery.Pipeline()
-
+	fmt.Println("filter", filter)
 	// 執行查詢
 	cur, err := collection.Aggregate(ctx, filter)
 	if err != nil {
@@ -83,31 +83,31 @@ func (service *adService) FindByFilter(ctx context.Context, adQuery *AdQuery) (*
 }
 
 // Store implements model.Storager.
-func (service *adService) Store(ad *AD) error {
+func (adRepo *AdRepository) Store(ctx context.Context, ad *AD) error {
 	ad.Timestamp = time.Now().Unix()
 
-	collection, err := service.dbClient.GetCollection(collectionName)
+	collection, err := adRepo.dbClient.GetCollection(collectionName)
 	if err != nil {
 		return err
 	}
-	_, err = collection.InsertOne(context.Background(), ad)
+	_, err = collection.InsertOne(ctx, ad)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (service *adService) Getlivead() (int, error) {
+func (adRepo *AdRepository) Getlivead() (int, error) {
 	return 0, nil
 }
 
-func (service *adService) GetDailyCreatAd() (int, error) {
+func (adRepo *AdRepository) GetDailyCreatAd() (int, error) {
 	return 0, nil
 }
 
-func (service *adService) Aggregate(ctx context.Context, filter model.Filter, result any) error {
+func (adRepo *AdRepository) Aggregate(ctx context.Context, filter model.Filter, result any) error {
 	pipe := filter.Pipeline()
-	collection, err := service.dbClient.GetCollection(collectionName)
+	collection, err := adRepo.dbClient.GetCollection(collectionName)
 	if err != nil {
 		return err
 	}
