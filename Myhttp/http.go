@@ -1,4 +1,4 @@
-package Myhttp
+package myhttp
 
 import (
 	"context"
@@ -17,9 +17,13 @@ type Server struct {
 type Method string
 type Path string
 
-
 type MyMux struct {
 	method map[Method]map[Path]*Router
+}
+
+type Response struct {
+	Message   []byte
+	StausCode int
 }
 
 type Router struct {
@@ -53,21 +57,20 @@ func (s *Server) setRouter(path string, method Method, handler http.HandlerFunc)
 }
 
 func useRouter(m *MyMux, r *http.Request) http.Handler {
-	log.Println("connect:", r.Method, r.URL.Path)
-
-	if m.method[Method(r.Method)] == nil {
+	if _, excite := m.method[Method(r.Method)]; !excite {
 		return nil
 	}
-
 	if m.method[Method(r.Method)][Path(r.URL.Path)] == nil {
 		log.Println("not found", r.Method, ":", r.URL.Path)
 		return nil
 	}
 
+	log.Println("connect:", r.Method, r.URL.Path)
 	return m.method[Method(r.Method)][Path(r.URL.Path)].handler
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	log.Println("-->", r.Method, r.URL.Path)
 	if r.RequestURI == "*" {
 		if r.ProtoAtLeast(1, 1) {
 			w.Header().Set("Connection", "close")
