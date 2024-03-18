@@ -28,7 +28,7 @@ func (t *Translate) Decode(cur *mongo.Cursor, result interface{}) {
 			log.Fatal(err)
 		}
 	} else {
-		log.Fatal("No documents found")
+		//no document found
 	}
 }
 func (t *Translate) Decodes(cur *mongo.Cursor, results any) {
