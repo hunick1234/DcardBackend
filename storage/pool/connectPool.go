@@ -1,6 +1,7 @@
 package pool
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/hunick1234/DcardBackend/config"
@@ -9,17 +10,17 @@ import (
 
 var mu sync.Mutex
 
-type pool struct {
+type Pool struct {
 	dbConnections map[string]storage.Storager
 }
 
-func NewPool() *pool {
-	return &pool{
+func NewPool() *Pool {
+	return &Pool{
 		dbConnections: make(map[string]storage.Storager, 10),
 	}
 }
 
-func (p *pool) GetConnection(cfg *config.MongoCfg) (storage.Storager, error) {
+func (p *Pool) GetConnection(cfg *config.MongoCfg) (storage.Storager, error) {
 	var err error
 	mu.Lock()
 	defer mu.Unlock()
@@ -41,13 +42,13 @@ func (p *pool) GetConnection(cfg *config.MongoCfg) (storage.Storager, error) {
 	return storeger, nil
 }
 
-func (p *pool) ClosePool() {
+func (p *Pool) ClosePool() {
 	for _, conn := range p.dbConnections {
 		conn.Disconnect()
 	}
 }
 
-func (p *pool) Disconnect(conn storage.Storager) {
+func (p *Pool) Disconnect(conn storage.Storager) {
 	err := conn.Disconnect()
 	if err != nil {
 		return
@@ -59,4 +60,20 @@ func ChcekConn(conn storage.Storager) bool {
 		return false
 	}
 	return true
+}
+
+func (p *Pool) LockConnection(dbName string) (storage.Storager, error) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	conn, exists := p.dbConnections[dbName]
+	if !exists || !ChcekConn(conn) {
+		return nil, fmt.Errorf("connection does not exist or is not healthy")
+	}
+
+	return conn, nil
+}
+
+func (p *Pool) UnlockConnection(dbName string) {
+	mu.Unlock()
 }
