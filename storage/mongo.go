@@ -32,12 +32,16 @@ func NewMongoDB() *MongoDB {
 }
 
 func NewMongoConn(cfg *config.MongoCfg) (Storager, error) {
-	opts := options.Client().ApplyURI(cfg.URI)
-	dbName := cfg.DB
-	client, db, err := connectToMongo(opts, dbName)
+	opts := options.Client().ApplyURI(cfg.URI).
+		SetConnectTimeout(cfg.ConnectTimeout).
+		SetMaxPoolSize(cfg.MaxPoolSize).
+		SetMinPoolSize(cfg.MinPoolSize)
+
+	client, db, err := connectToMongo(opts, cfg.DB)
 	if err != nil {
 		return nil, err
 	}
+
 	return &MongoDB{
 		Client: client,
 		DB:     db,
