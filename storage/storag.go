@@ -3,7 +3,8 @@ package storage
 import "go.mongodb.org/mongo-driver/mongo"
 
 type Storager interface {
-	Connect() (Storager, error)
+	GetDBName() string
+	Ping() error
 	Disconnect() error
 	GetCollection(string) (*mongo.Collection, error)
 }

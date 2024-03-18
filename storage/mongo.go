@@ -2,9 +2,9 @@ package storage
 
 import (
 	"context"
-	"sync"
 	"time"
 
+	"github.com/hunick1234/DcardBackend/config"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
@@ -15,53 +15,38 @@ const (
 )
 
 type MongoDB struct {
-	DB             *mongo.Database
-	Client         *mongo.Client
-	Options        *options.ClientOptions
-	CollectionName string
-	DBNmae         string
+	DB     *mongo.Database
+	Client *mongo.Client
 }
 
-var dbConnections map[string]Storager
-var mu sync.Mutex
-
 func init() {
-	dbConnections = make(map[string]Storager, 10)
+
 	var _ Storager = (*MongoDB)(nil)
 }
 
 func NewMongoDB() *MongoDB {
 	return &MongoDB{
-		Client:         nil,
-		DB:             nil,
-		CollectionName: "",
-		DBNmae:         "",
-		Options:        options.Client().ApplyURI(MongoAddress),
+		Client: nil,
+		DB:     nil,
 	}
 }
 
-func connect(opts *options.ClientOptions, dbName string) (Storager, error) {
-	var err error
-	mu.Lock()
-	defer mu.Unlock()
-	//connect to db at first time
-	if condition, ok := dbConnections[dbName]; ok {
-		return condition, nil
-	}
+func NewMongoConn(cfg *config.MongoCfg) (Storager, error) {
+	opts := options.Client().ApplyURI(cfg.URI).
+		SetConnectTimeout(cfg.ConnectTimeout).
+		SetMaxPoolSize(cfg.MaxPoolSize).
+		SetMinPoolSize(cfg.MinPoolSize)
 
-	client, db, err := connectToMongo(opts, dbName)
+	client, db, err := connectToMongo(opts, cfg.DB)
 	if err != nil {
 		return nil, err
 	}
-	dbConnections[dbName] = &MongoDB{
-		Client:         client,
-		DB:             db,
-		Options:        opts,
-		DBNmae:         dbName,
-		CollectionName: "",
-	}
 
-	return dbConnections[dbName], nil
+	return &MongoDB{
+		Client: client,
+		DB:     db,
+	}, nil
+
 }
 
 func connectToMongo(opts *options.ClientOptions, dbName string) (*mongo.Client, *mongo.Database, error) {
@@ -81,14 +66,6 @@ func connectToMongo(opts *options.ClientOptions, dbName string) (*mongo.Client, 
 	return client, db, nil
 }
 
-func (m *MongoDB) Connect() (Storager, error) {
-	storage, err := connect(m.Options, m.DBNmae)
-	if err != nil {
-		return nil, err
-	}
-	return storage, nil
-}
-
 // implement Storager interface
 func (m *MongoDB) Disconnect() error {
 	m.Client.Disconnect(context.Background())
@@ -98,4 +75,18 @@ func (m *MongoDB) Disconnect() error {
 func (m *MongoDB) GetCollection(collection string) (*mongo.Collection, error) {
 	coll := m.DB.Collection(collection)
 	return coll, nil
+}
+
+func (m *MongoDB) Ping() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	err := m.Client.Ping(ctx, readpref.Primary())
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (m *MongoDB) GetDBName() string {
+	return m.DB.Name()
 }
