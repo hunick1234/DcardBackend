@@ -34,7 +34,6 @@ type Router struct {
 	handler http.HandlerFunc
 }
 
-<<<<<<< HEAD:Myhttp/server.go
 var server *Server
 
 func init() {
@@ -47,12 +46,6 @@ func init() {
 }
 
 func NewServer() *Server {
-	if server != nil {
-		return server
-	}
-=======
-func NewServer() *Server {
->>>>>>> develop:Myhttp/http.go
 	return &Server{
 		Server: &http.Server{
 			Addr: ":8080",
@@ -61,6 +54,10 @@ func NewServer() *Server {
 			method: make(map[Method]map[Path]*Router, 10),
 		},
 	}
+}
+
+func DebugServer() *Server {
+	return server
 }
 
 // todo check path first byte is '/'
