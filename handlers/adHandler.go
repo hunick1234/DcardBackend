@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"log"
 	"net/http"
 	"time"
@@ -17,7 +18,7 @@ import (
 	"github.com/hunick1234/DcardBackend/types"
 )
 
-type AdHandlerFunc func(service.AdService, dto.Request, *myhttp.Response) error
+type AdHandlerFunc func(service.AdService, *types.AdControllerCtx) error
 
 func AdHandler(server *server.Server, api AdHandlerFunc, flows []controller.APIController) http.HandlerFunc {
 	conn, err := server.Pool.GetConnection(&config.MongoCfg{
@@ -32,6 +33,7 @@ func AdHandler(server *server.Server, api AdHandlerFunc, flows []controller.APIC
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) {
+		// create request context
 		req, err := dto.NewRequest(r)
 		if err != nil {
 			httpError(w, http.StatusBadRequest, err.Error())
@@ -56,6 +58,7 @@ func AdHandler(server *server.Server, api AdHandlerFunc, flows []controller.APIC
 		adService := service.NewAdService(adRepo)
 		start := time.Now()
 
+		// before api event
 		for _, flow := range flows {
 			if err := flow.BeforeAPIEvent(adCtx, adService); err != nil {
 				httpError(w, http.StatusInternalServerError, err.Error())
@@ -65,15 +68,16 @@ func AdHandler(server *server.Server, api AdHandlerFunc, flows []controller.APIC
 		elapsed := time.Since(start)
 		log.Printf("bAPI took %s", elapsed)
 
+		// api event
 		start = time.Now()
-		res := &myhttp.Response{}
-		if err := api(adService, req, res); err != nil {
+		if err := api(adService, adCtx); err != nil {
 			httpError(w, http.StatusInternalServerError, "error in API")
 			return
 		}
 		elapsed = time.Since(start)
 		log.Printf("API took %s", elapsed)
 
+		// after api event
 		start = time.Now()
 		for _, flow := range flows {
 			if err := flow.AfterAPIEvent(adCtx, adService); err != nil {
@@ -84,11 +88,16 @@ func AdHandler(server *server.Server, api AdHandlerFunc, flows []controller.APIC
 		elapsed = time.Since(start)
 		log.Printf("aAPI took %s", elapsed)
 
-		w.WriteHeader(res.StausCode)
-		w.Write(res.Message)
-		log.Println("<--", res.StausCode)
-
+		// write response
+		httpResponJson(w, adCtx.W.StausCode, adCtx.W.Message)
 	}
+}
+
+func httpResponJson(w http.ResponseWriter, statusCode int, message []byte) {
+	// write respon to json
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(message)
+	log.Println("<--", statusCode)
 }
 
 func httpError(w http.ResponseWriter, statusCode int, message string) {
