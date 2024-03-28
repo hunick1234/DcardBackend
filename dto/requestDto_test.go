@@ -63,7 +63,7 @@ func TestPostRequest(t *testing.T) {
 			true, ""},
 		{`{"title": "AD 10", "endAt": "2023-12-23T01:00:00.000Z", "startAt": "2023-12-22T01:00:00.000Z",
 			"conditions": {"country":["tw"]}}`,
-			true, ""},
+			false, "country should be iso-3166"},
 		{`{"title": "AD 11", "endAt": "2023-12-23T01:00:00.000Z", "startAt": "2023-12-22T01:00:00.000Z",
 			"conditions": {"platform":["ios"]}}`,
 			true, ""},
