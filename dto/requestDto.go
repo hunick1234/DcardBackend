@@ -96,7 +96,8 @@ func convertToAdQuery(r *http.Request) (ad.AdQuery, error) {
 }
 
 func convertToAd(r *http.Request) (ad.AD, error) {
-	var ad ad.AD
+	//set ad.Timestamp
+	var ad = ad.NewAd()
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		return ad, err
