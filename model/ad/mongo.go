@@ -26,7 +26,6 @@ type AdRepository struct {
 func init() {
 	// implementation of init method
 	var _ model.Repository[AD, AdQuery] = (*AdRepository)(nil)
-	AdRepo = DeafultAdRepository()
 }
 
 func NewAdRepository(dbClient storage.Storager) *AdRepository {
@@ -84,8 +83,6 @@ func (adRepo *AdRepository) FindByFilter(ctx context.Context, adQuery *AdQuery) 
 
 // Store implements model.Storager.
 func (adRepo *AdRepository) Store(ctx context.Context, ad *AD) error {
-	ad.Timestamp = time.Now().Unix()
-
 	collection, err := adRepo.dbClient.GetCollection(collectionName)
 	if err != nil {
 		return err

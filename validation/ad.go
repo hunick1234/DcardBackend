@@ -6,10 +6,17 @@ var Plateform = map[string]bool{
 	"ios":     true,
 	"android": true,
 	"web":     true,
+	"IOS":     true,
+	"ANDROID": true,
+	"WEB":     true,
+	"Android": true,
+	"Web":     true,
 }
 var Gender = map[string]bool{
 	"M": true,
 	"F": true,
+	"m": true,
+	"f": true,
 }
 
 type Iso3166 struct{}

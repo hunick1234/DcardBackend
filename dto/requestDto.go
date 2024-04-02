@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/hunick1234/DcardBackend/model/ad"
 )
@@ -58,36 +59,54 @@ func (r *Request) GetRequestAdQuery() ad.AdQuery {
 }
 
 func convertToAdQuery(r *http.Request) (ad.AdQuery, error) {
-
 	query := ad.DefaultAdQuery()
 
-	offsetStr := r.URL.Query().Get("offset")
-	if offset, err := strconv.Atoi(offsetStr); err == nil {
-		query.Offset = offset
+	offset := r.URL.Query()["offset"]
+	if len(offset) != 0 {
+		if result, ok := query2Int(offset); ok {
+			query.Offset = result
+		} else {
+			return ad.AdQuery{}, errors.New("wrong query")
+		}
 	}
-	limitStr := r.URL.Query().Get("limit")
-	if limit, err := strconv.Atoi(limitStr); err == nil {
-		query.Limit = limit
+
+	limit := r.URL.Query()["limit"]
+	if len(limit) != 0 {
+		if result, ok := query2Int(limit); ok {
+			query.Limit = result
+		} else {
+			return ad.AdQuery{}, errors.New("wrong query")
+		}
 	}
-	ageStr := r.URL.Query().Get("age")
-	if age, err := strconv.Atoi(ageStr); err == nil {
-		query.Age = age
+
+	age := r.URL.Query()["age"]
+	if result, ok := query2Int(age); ok {
+		query.Age = result
+	} else {
+		return ad.AdQuery{}, errors.New("wrong query")
 	}
+
 	gender := r.URL.Query()["gender"]
-	query.Gender = gender
+	query.Gender = query2Arr(gender)
 	country := r.URL.Query()["country"]
-	query.Country = country
+	query.Country = query2Arr(country)
 	platform := r.URL.Query()["platform"]
-	query.Platform = platform
+	query.Platform = query2Arr(platform)
 
 	if !query.IsValidAdQuery() {
-		return ad.AdQuery{}, errors.New("invalid query")
+		return ad.AdQuery{}, errors.New("invalid query vaule")
 	}
+
+	//統一查詢大寫
+	query.Country = toUpperCase(query.Country)
+	query.Platform = toUpperCase(query.Platform)
+
 	return query, nil
 }
 
 func convertToAd(r *http.Request) (ad.AD, error) {
-	var ad ad.AD
+	//set ad.Timestamp
+	var ad = ad.NewAd()
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		return ad, err
@@ -104,5 +123,46 @@ func convertToAd(r *http.Request) (ad.AD, error) {
 	if !ad.Conditions.IsValidConditions() {
 		return ad, errors.New("invalid conditions")
 	}
+
+	//統一資料庫大小寫
+	ad.Conditions.Country = toUpperCase(ad.Conditions.Country)
+	ad.Conditions.Platform = toUpperCase(ad.Conditions.Platform)
 	return ad, nil
+}
+
+func query2Int(q []string) (int, bool) {
+	if len(q) == 0 {
+		return 0, true
+	}
+	if len(q) > 1 {
+		return 0, false
+	}
+	if result, err := strconv.Atoi(q[0]); err == nil {
+		return result, true
+	}
+	return 0, false
+}
+
+// 暫不支援混用.  ?country=JP,TW&country=US....
+func query2Arr(s []string) []string {
+	if len(s) == 0 {
+		return []string{}
+	}
+	if len(s) == 1 {
+		if strings.Contains(s[0], ",") {
+			return splitByComma(s[0])
+		}
+	}
+	return s
+}
+
+func splitByComma(s string) []string {
+	return strings.Split(s, ",")
+}
+
+func toUpperCase(s []string) []string {
+	for i := range s {
+		s[i] = strings.ToUpper(s[i])
+	}
+	return s
 }

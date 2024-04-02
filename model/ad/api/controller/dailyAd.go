@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"net/http"
 	"sync"
 	"time"
 
@@ -16,34 +17,49 @@ import (
 type DailyAd struct {
 	DailyAdCreat int
 	ChangeTime   int64
+	temp         int
+	dailyLimit   int
 	lock         *sync.Mutex
-	wg           *sync.WaitGroup
 }
 
 func NewDailyAd() *DailyAd {
 	return &DailyAd{
 		DailyAdCreat: 0,
+		temp:         0,
 		ChangeTime:   0,
+		dailyLimit:   10000,
 		lock:         &sync.Mutex{},
-		wg:           &sync.WaitGroup{},
 	}
 }
 
 func (d *DailyAd) BeforeAPIEvent(adCtx *types.AdControllerCtx, srv service.AdService) error {
-	ctx := adCtx.Ctx
-	err := d.event(ctx, srv)
-	if err != nil {
-		return err
+	d.lock.Lock()
+	defer d.lock.Unlock()
+
+	log.Println("daily ad: ", d.DailyAdCreat)
+	if d.DailyAdCreat >= d.dailyLimit {
+		log.Println("daily limit of 3000 data entries")
+		adCtx.W.StausCode = http.StatusTooManyRequests
+		adCtx.Err = errors.New("daily limit of 3000 data entries")
+		return nil
 	}
-	if d.DailyAdCreat >= 3000 {
-		return errors.New("daily limit of 3000 data entries")
+
+	//wait the
+	for d.temp >= d.dailyLimit && d.DailyAdCreat < d.dailyLimit {
+		time.Sleep(10 * time.Millisecond)
 	}
+	d.temp++
 	return nil
 }
 
 func (d *DailyAd) AfterAPIEvent(adCtx *types.AdControllerCtx, srv service.AdService) error {
 	d.lock.Lock()
 	defer d.lock.Unlock()
+	if adCtx.W.StausCode < 200 || adCtx.W.StausCode >= 300 {
+		d.temp--
+		return nil
+	}
+
 	d.DailyAdCreat++
 	return nil
 }
@@ -72,6 +88,7 @@ func (d *DailyAd) Pipeline() mongo.Pipeline {
 }
 
 func (d *DailyAd) InitEvent(adCtx *types.AdControllerCtx, srv service.AdService) error {
+	d.startDailyReset(srv)
 	ctx := adCtx.Ctx
 	err := d.event(ctx, srv)
 	if err != nil {
@@ -92,4 +109,17 @@ func (d *DailyAd) event(ctx context.Context, srv service.AdService) error {
 	d.DailyAdCreat = result.DailyAd
 	log.Println("today creat ad count", d.DailyAdCreat)
 	return nil
+}
+
+func (d *DailyAd) startDailyReset(srv service.AdService) {
+	ticker := time.NewTicker(time.Until(time.Date(time.Now().Year(), time.Now().Month(), time.Now().Day()+1, 0, 0, 0, 0, time.Now().Location())))
+	go func() {
+		for range ticker.C {
+			d.lock.Lock()
+			d.DailyAdCreat = 0
+			d.temp = 0
+			d.lock.Unlock()
+			d.event(context.Background(), srv)
+		}
+	}()
 }

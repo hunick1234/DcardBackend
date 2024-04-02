@@ -5,41 +5,52 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/hunick1234/DcardBackend/dto"
 	"github.com/hunick1234/DcardBackend/model/ad"
-	"github.com/hunick1234/DcardBackend/myhttp"
 	"github.com/hunick1234/DcardBackend/service"
+	"github.com/hunick1234/DcardBackend/types"
 )
 
 type AdParama interface {
 	ad.AD | ad.AdQuery
 }
 
-func GetAd(svc service.AdService, dto dto.Request, res *myhttp.Response) error {
-	query := dto.GetRequestAdQuery()
+func GetAd(svc service.AdService, adCtx *types.AdControllerCtx) error {
+	if adCtx.Err != nil {
+		return nil
+	}
 
+	query := adCtx.R.GetRequestAdQuery()
 	ad, err := svc.FindByFilter(context.Background(), &query)
 	if err != nil {
-		return err
+		adCtx.W.StausCode = http.StatusInternalServerError
+		adCtx.Err = err
+		return nil
 	}
 	bytes, err := json.Marshal(ad)
 	if err != nil {
-		return err
+		adCtx.W.StausCode = http.StatusInternalServerError
+		adCtx.Err = err
+		return nil
 	}
-	res.Message = bytes
-	res.StausCode = http.StatusOK
+	adCtx.W.Message = bytes
+	adCtx.W.StausCode = http.StatusOK
 	return nil
 }
 
-func PostAd(service service.AdService, dto dto.Request, res *myhttp.Response) error {
-	ad := dto.GetRequestAd()
-
-	err := service.Store(context.Background(), &ad)
-	if err != nil {
-		return err
+func PostAd(service service.AdService, adCtx *types.AdControllerCtx) error {
+	if adCtx.Err != nil {
+		return nil
 	}
 
-	res.Message = []byte("success")
-	res.StausCode = http.StatusOK
+	ad := adCtx.R.GetRequestAd()
+	err := service.Store(context.Background(), &ad)
+	if err != nil {
+		adCtx.W.StausCode = http.StatusInternalServerError
+		adCtx.Err = err
+		return nil
+	}
+
+	adCtx.W.Message = []byte("success")
+	adCtx.W.StausCode = http.StatusOK
 	return nil
 }
