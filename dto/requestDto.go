@@ -62,17 +62,21 @@ func convertToAdQuery(r *http.Request) (ad.AdQuery, error) {
 	query := ad.DefaultAdQuery()
 
 	offset := r.URL.Query()["offset"]
-	if result, ok := query2Int(offset); ok {
-		query.Offset = result
-	} else {
-		return ad.AdQuery{}, errors.New("wrong query")
+	if len(offset) != 0 {
+		if result, ok := query2Int(offset); ok {
+			query.Offset = result
+		} else {
+			return ad.AdQuery{}, errors.New("wrong query")
+		}
 	}
 
 	limit := r.URL.Query()["limit"]
-	if result, ok := query2Int(limit); ok {
-		query.Limit = result
-	} else {
-		return ad.AdQuery{}, errors.New("wrong query")
+	if len(limit) != 0 {
+		if result, ok := query2Int(limit); ok {
+			query.Limit = result
+		} else {
+			return ad.AdQuery{}, errors.New("wrong query")
+		}
 	}
 
 	age := r.URL.Query()["age"]
@@ -92,6 +96,11 @@ func convertToAdQuery(r *http.Request) (ad.AdQuery, error) {
 	if !query.IsValidAdQuery() {
 		return ad.AdQuery{}, errors.New("invalid query vaule")
 	}
+
+	//統一查詢大寫
+	query.Country = toUpperCase(query.Country)
+	query.Platform = toUpperCase(query.Platform)
+
 	return query, nil
 }
 
@@ -114,6 +123,10 @@ func convertToAd(r *http.Request) (ad.AD, error) {
 	if !ad.Conditions.IsValidConditions() {
 		return ad, errors.New("invalid conditions")
 	}
+
+	//統一資料庫大小寫
+	ad.Conditions.Country = toUpperCase(ad.Conditions.Country)
+	ad.Conditions.Platform = toUpperCase(ad.Conditions.Platform)
 	return ad, nil
 }
 
@@ -145,4 +158,11 @@ func query2Arr(s []string) []string {
 
 func splitByComma(s string) []string {
 	return strings.Split(s, ",")
+}
+
+func toUpperCase(s []string) []string {
+	for i := range s {
+		s[i] = strings.ToUpper(s[i])
+	}
+	return s
 }
