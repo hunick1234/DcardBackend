@@ -1,8 +1,6 @@
 package handlers
 
 import (
-	"context"
-	"encoding/json"
 	"log"
 	"net/http"
 	"time"
@@ -36,13 +34,15 @@ func AdHandler(server *server.Server, api AdHandlerFunc, flows []controller.APIC
 		// create request context
 		req, err := dto.NewRequest(r)
 		if err != nil {
+			log.Println("Error creating request:", err)
 			httpError(w, http.StatusBadRequest, err.Error())
 			return
 		}
 		adCtx := &types.AdControllerCtx{
-			Ctx: context.Background(),
+			Ctx: r.Context(),
 			R:   &req,
 			W:   &myhttp.Response{},
+			Err: nil,
 		}
 
 		conn, err := server.Pool.GetConnection(&config.MongoCfg{
@@ -50,53 +50,52 @@ func AdHandler(server *server.Server, api AdHandlerFunc, flows []controller.APIC
 			DB:  "dcard",
 		})
 		if err != nil {
+			log.Println("Error getting connection:", err)
 			httpError(w, http.StatusInternalServerError, "error getting connection")
 			return
 		}
 
 		adRepo := ad.NewAdRepository(conn)
 		adService := service.NewAdService(adRepo)
-		start := time.Now()
 
+		start := time.Now()
 		// before api event
 		for _, flow := range flows {
-			if err := flow.BeforeAPIEvent(adCtx, adService); err != nil {
-				httpError(w, http.StatusInternalServerError, err.Error())
-				return
-			}
+			flow.BeforeAPIEvent(adCtx, adService)
 		}
 		elapsed := time.Since(start)
 		log.Printf("bAPI took %s", elapsed)
 
 		// api event
 		start = time.Now()
-		if err := api(adService, adCtx); err != nil {
-			httpError(w, http.StatusInternalServerError, "error in API")
-			return
-		}
+		api(adService, adCtx)
 		elapsed = time.Since(start)
 		log.Printf("API took %s", elapsed)
 
 		// after api event
 		start = time.Now()
 		for _, flow := range flows {
-			if err := flow.AfterAPIEvent(adCtx, adService); err != nil {
-				httpError(w, http.StatusInternalServerError, err.Error())
-				return
-			}
+			flow.AfterAPIEvent(adCtx, adService)
 		}
 		elapsed = time.Since(start)
 		log.Printf("aAPI took %s", elapsed)
 
 		// write response
-		httpResponJson(w, adCtx.W.StausCode, adCtx.W.Message)
+		if adCtx.Err != nil {
+			httpError(w, adCtx.W.StausCode, adCtx.Err.Error())
+			return
+		} else {
+			httpResponJson(w, adCtx.W.StausCode, adCtx.W.Message)
+			return
+		}
 	}
 }
 
 func httpResponJson(w http.ResponseWriter, statusCode int, message []byte) {
 	// write respon to json
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(message)
+	//json.NewEncoder(w).Encode(message)
+	w.Write(message)
 	log.Println("<--", statusCode)
 }
 
@@ -114,5 +113,5 @@ func StartAPIControll(server *server.Server) {
 	dailyAd := controller.NewDailyAd()
 
 	server.HTTP.Get("/api/v1/ad", AdHandler(server, v1.GetAd, []controller.APIController{}))
-	server.HTTP.Post("/api/v1/ad", AdHandler(server, v1.PostAd, []controller.APIController{liveAd, dailyAd}))
+	server.HTTP.Post("/api/v1/ad", AdHandler(server, v1.PostAd, []controller.APIController{dailyAd, liveAd}))
 }

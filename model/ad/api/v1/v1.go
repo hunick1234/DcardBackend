@@ -15,16 +15,22 @@ type AdParama interface {
 }
 
 func GetAd(svc service.AdService, adCtx *types.AdControllerCtx) error {
-	
-	query := adCtx.R.GetRequestAdQuery()
+	if adCtx.Err != nil {
+		return nil
+	}
 
+	query := adCtx.R.GetRequestAdQuery()
 	ad, err := svc.FindByFilter(context.Background(), &query)
 	if err != nil {
-		return err
+		adCtx.W.StausCode = http.StatusInternalServerError
+		adCtx.Err = err
+		return nil
 	}
 	bytes, err := json.Marshal(ad)
 	if err != nil {
-		return err
+		adCtx.W.StausCode = http.StatusInternalServerError
+		adCtx.Err = err
+		return nil
 	}
 	adCtx.W.Message = bytes
 	adCtx.W.StausCode = http.StatusOK
@@ -32,11 +38,16 @@ func GetAd(svc service.AdService, adCtx *types.AdControllerCtx) error {
 }
 
 func PostAd(service service.AdService, adCtx *types.AdControllerCtx) error {
-	ad := adCtx.R.GetRequestAd()
+	if adCtx.Err != nil {
+		return nil
+	}
 
+	ad := adCtx.R.GetRequestAd()
 	err := service.Store(context.Background(), &ad)
 	if err != nil {
-		return err
+		adCtx.W.StausCode = http.StatusInternalServerError
+		adCtx.Err = err
+		return nil
 	}
 
 	adCtx.W.Message = []byte("success")

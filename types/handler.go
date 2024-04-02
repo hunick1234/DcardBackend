@@ -11,4 +11,5 @@ type AdControllerCtx struct {
 	Ctx context.Context
 	R   *dto.Request
 	W   *myhttp.Response
+	Err error
 }
