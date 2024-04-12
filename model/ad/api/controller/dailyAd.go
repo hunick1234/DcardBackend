@@ -5,7 +5,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
-	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/hunick1234/DcardBackend/service"
@@ -15,29 +15,24 @@ import (
 )
 
 type DailyAd struct {
-	DailyAdCreat int
-	ChangeTime   int64
-	temp         int
-	dailyLimit   int
-	lock         *sync.Mutex
+	DailyAdCreat atomic.Int32
+	ChangeTime   atomic.Int32
+	temp         atomic.Int32
+	dailyLimit   int32
 }
 
 func NewDailyAd() *DailyAd {
 	return &DailyAd{
-		DailyAdCreat: 0,
-		temp:         0,
-		ChangeTime:   0,
-		dailyLimit:   10000,
-		lock:         &sync.Mutex{},
+		DailyAdCreat: atomic.Int32{},
+		temp:         atomic.Int32{},
+		ChangeTime:   atomic.Int32{},
+		dailyLimit:   3000,
 	}
 }
 
 func (d *DailyAd) BeforeAPIEvent(adCtx *types.AdControllerCtx, srv service.AdService) error {
-	d.lock.Lock()
-	defer d.lock.Unlock()
-
-	log.Println("daily ad: ", d.DailyAdCreat)
-	if d.DailyAdCreat >= d.dailyLimit {
+	log.Println("daily ad: ", d.DailyAdCreat.Load())
+	if d.DailyAdCreat.Load() >= d.dailyLimit {
 		log.Println("daily limit of 3000 data entries")
 		adCtx.W.StausCode = http.StatusTooManyRequests
 		adCtx.Err = errors.New("daily limit of 3000 data entries")
@@ -45,22 +40,20 @@ func (d *DailyAd) BeforeAPIEvent(adCtx *types.AdControllerCtx, srv service.AdSer
 	}
 
 	//wait the
-	for d.temp >= d.dailyLimit && d.DailyAdCreat < d.dailyLimit {
+	for d.temp.Load() >= d.dailyLimit && d.DailyAdCreat.Load() < d.dailyLimit {
 		time.Sleep(10 * time.Millisecond)
 	}
-	d.temp++
+	d.temp.Add(1)
 	return nil
 }
 
 func (d *DailyAd) AfterAPIEvent(adCtx *types.AdControllerCtx, srv service.AdService) error {
-	d.lock.Lock()
-	defer d.lock.Unlock()
 	if adCtx.W.StausCode < 200 || adCtx.W.StausCode >= 300 {
-		d.temp--
+		d.temp.Add(-1)
 		return nil
 	}
 
-	d.DailyAdCreat++
+	d.DailyAdCreat.Add(1)
 	return nil
 }
 
@@ -99,15 +92,15 @@ func (d *DailyAd) InitEvent(adCtx *types.AdControllerCtx, srv service.AdService)
 
 func (d *DailyAd) event(ctx context.Context, srv service.AdService) error {
 	var result struct {
-		DailyAd int `bson:"daily_ad"`
+		DailyAd int32 `bson:"daily_ad"`
 	}
 
 	err := srv.Aggregate(context.TODO(), d, &result)
 	if err != nil {
 		return err
 	}
-	d.DailyAdCreat = result.DailyAd
-	log.Println("today creat ad count", d.DailyAdCreat)
+	d.DailyAdCreat.Store(result.DailyAd)
+	log.Println("today creat ad count", d.DailyAdCreat.Load())
 	return nil
 }
 
@@ -115,10 +108,8 @@ func (d *DailyAd) startDailyReset(srv service.AdService) {
 	ticker := time.NewTicker(time.Until(time.Date(time.Now().Year(), time.Now().Month(), time.Now().Day()+1, 0, 0, 0, 0, time.Now().Location())))
 	go func() {
 		for range ticker.C {
-			d.lock.Lock()
-			d.DailyAdCreat = 0
-			d.temp = 0
-			d.lock.Unlock()
+			d.DailyAdCreat.Store(0)
+			d.temp.Store(0)
 			d.event(context.Background(), srv)
 		}
 	}()

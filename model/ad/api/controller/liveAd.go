@@ -5,7 +5,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
-	"sync"
+	"sync/atomic"
 
 	"github.com/hunick1234/DcardBackend/service"
 	"github.com/hunick1234/DcardBackend/types"
@@ -14,16 +14,14 @@ import (
 )
 
 type LiveAd struct {
-	LiveAdCount int
+	LiveAdCount atomic.Int32
 	StartAt     int64
-	lock        *sync.Mutex
 }
 
 func NewLiveAd() *LiveAd {
 	return &LiveAd{
-		LiveAdCount: 0,
+		LiveAdCount: atomic.Int32{},
 		StartAt:     0,
-		lock:        &sync.Mutex{},
 	}
 }
 
@@ -41,8 +39,6 @@ func (l *LiveAd) Pipeline() mongo.Pipeline {
 
 func (l *LiveAd) BeforeAPIEvent(adCtx *types.AdControllerCtx, srv service.AdService) error {
 
-	l.lock.Lock()
-	defer l.lock.Unlock()
 	ctx := adCtx.Ctx
 	ad := adCtx.R.GetRequestAd()
 	//remember set start_at time
@@ -54,7 +50,7 @@ func (l *LiveAd) BeforeAPIEvent(adCtx *types.AdControllerCtx, srv service.AdServ
 		adCtx.Err = err
 		return nil
 	}
-	if l.LiveAdCount >= 1000 {
+	if l.LiveAdCount.Load() >= 1000 {
 		log.Println("live ad limit of 1000 data entries")
 		adCtx.W.StausCode = http.StatusBadRequest
 		adCtx.Err = errors.New("live ad limit of 1000 data entries")
@@ -70,7 +66,7 @@ func (l *LiveAd) AfterAPIEvent(adCtx *types.AdControllerCtx, srv service.AdServi
 
 func (l *LiveAd) InitEvent(adCtx *types.AdControllerCtx, srv service.AdService) error {
 	l.StartAt = 0
-	l.LiveAdCount = 0
+	l.LiveAdCount.Store(0)
 	return nil
 }
 
@@ -80,14 +76,14 @@ func (l *LiveAd) SetStartAt(startAt int64) {
 
 func (l *LiveAd) event(ctx context.Context, srv service.AdService) error {
 	var aggResult struct {
-		LiveAd int `bson:"live_ad"`
+		LiveAd int32 `bson:"live_ad"`
 	}
 	// Translate the result of the aggregation to a Go struct
 	err := srv.Aggregate(context.TODO(), l, &aggResult)
 	if err != nil {
 		return err
 	}
-	l.LiveAdCount = aggResult.LiveAd
+	l.LiveAdCount.Store(aggResult.LiveAd)
 	log.Println("LiveAdCount", l.LiveAdCount)
 	return nil
 }

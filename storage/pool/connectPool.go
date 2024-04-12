@@ -1,36 +1,62 @@
 package pool
 
 import (
-	"fmt"
+	"log"
 	"sync"
+	"time"
 
 	"github.com/hunick1234/DcardBackend/config"
 	"github.com/hunick1234/DcardBackend/storage"
 )
 
-var mu sync.Mutex
-
 type Pool struct {
-	dbConnections map[string]storage.Storager
+	dbConnections sync.Map
 }
 
 func NewPool() *Pool {
 	return &Pool{
-		dbConnections: make(map[string]storage.Storager, 10),
+		dbConnections: sync.Map{},
 	}
 }
 
-func (p *Pool) GetConnection(cfg *config.MongoCfg) (storage.Storager, error) {
-	var err error
-	mu.Lock()
-	defer mu.Unlock()
-	//if exist return connection
-	if p.dbConnections[cfg.DB] != nil {
-		if ChcekConn(p.dbConnections[cfg.DB]) {
-			return p.dbConnections[cfg.DB], nil
-		}
-		p.dbConnections[cfg.DB] = nil
+func (p *Pool) setDBConnection(dbName string, conn storage.Storager) {
+	p.dbConnections.Store(dbName, conn)
+}
+
+func (p *Pool) getDBConnection(dbName string) (storage.Storager, bool) {
+	storager, ok := p.dbConnections.Load(dbName)
+	if !ok {
+		return nil, false
 	}
+	return storager.(storage.Storager), true
+}
+
+func (p *Pool) deleteDBConnection(dbName string) {
+	p.dbConnections.Delete(dbName)
+}
+
+func (p *Pool) rangeDBConnection(f func(dbName string, conn storage.Storager) bool) {
+	p.dbConnections.Range(func(key, value interface{}) bool {
+		return f(key.(string), value.(storage.Storager))
+	})
+}
+
+func (p *Pool) GetConnection(cfg *config.MongoCfg) (storage.Storager, error) {
+	start := time.Now()
+	defer func() {
+		log.Println("get connection time: ", time.Since(start))
+	}()
+
+	var err error
+
+	if conn, ok := p.getDBConnection(cfg.DB); ok {
+		if ChcekConn(conn) {
+			return conn, nil
+		}
+		p.deleteDBConnection(cfg.DB)
+	}
+
+	//if not exist, create new connection
 
 	//if not exist, create new connection
 	storeger, err := storage.NewMongoConn(cfg)
@@ -38,14 +64,16 @@ func (p *Pool) GetConnection(cfg *config.MongoCfg) (storage.Storager, error) {
 		return nil, err
 	}
 
-	p.dbConnections[cfg.DB] = storeger
+	p.setDBConnection(cfg.DB, storeger)
+
 	return storeger, nil
 }
 
 func (p *Pool) ClosePool() {
-	for _, conn := range p.dbConnections {
+	p.rangeDBConnection(func(dbName string, conn storage.Storager) bool {
 		conn.Disconnect()
-	}
+		return true
+	})
 }
 
 func (p *Pool) Disconnect(conn storage.Storager) {
@@ -53,27 +81,12 @@ func (p *Pool) Disconnect(conn storage.Storager) {
 	if err != nil {
 		return
 	}
-	p.dbConnections[conn.GetDBName()] = nil
+
+	p.dbConnections.Delete(conn.GetDBName())
 }
 func ChcekConn(conn storage.Storager) bool {
 	if conn.Ping() != nil {
 		return false
 	}
 	return true
-}
-
-func (p *Pool) LockConnection(dbName string) (storage.Storager, error) {
-	mu.Lock()
-	defer mu.Unlock()
-
-	conn, exists := p.dbConnections[dbName]
-	if !exists || !ChcekConn(conn) {
-		return nil, fmt.Errorf("connection does not exist or is not healthy")
-	}
-
-	return conn, nil
-}
-
-func (p *Pool) UnlockConnection(dbName string) {
-	mu.Unlock()
 }
