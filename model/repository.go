@@ -6,9 +6,9 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
-type Repository[T any, Q any] interface {
+type Repository[T any, Q any, R any] interface {
 	Store(context.Context, *T) error
-	FindByFilter(context.Context, *Q) (*[]T, error)
+	FindByFilter(context.Context, *Q) (*[]R, error)
 	Aggregate(context.Context, Filter, any) error
 }
 

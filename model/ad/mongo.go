@@ -25,7 +25,7 @@ type AdRepository struct {
 
 func init() {
 	// implementation of init method
-	var _ model.Repository[AD, AdQuery] = (*AdRepository)(nil)
+	var _ model.Repository[AD, AdQuery, ResponseAd] = (*AdRepository)(nil)
 }
 
 func NewAdRepository(dbClient storage.Storager) *AdRepository {
@@ -51,7 +51,7 @@ func DeafultAdRepository() *AdRepository {
 }
 
 // findByFilter implements model.Storager.
-func (adRepo *AdRepository) FindByFilter(ctx context.Context, adQuery *AdQuery) (*[]AD, error) {
+func (adRepo *AdRepository) FindByFilter(ctx context.Context, adQuery *AdQuery) (*[]ResponseAd, error) {
 
 	if adRepo.dbClient == nil {
 		return nil, fmt.Errorf("check you DB connection, it's nil")
@@ -63,17 +63,16 @@ func (adRepo *AdRepository) FindByFilter(ctx context.Context, adQuery *AdQuery) 
 	}
 
 	filter := adQuery.Pipeline()
-	fmt.Println("filter", filter)
 	// 執行查詢
 	cur, err := collection.Aggregate(ctx, filter)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	var results []AD
+	var results []ResponseAd
 	// Iterate through the cursor allowing to decode documents
 	var t storage.Translate
-	t.With(&AD{}).Decodes(cur, &results)
+	t.With(&ResponseAd{}).Decodes(cur, &results)
 
 	elapsed := time.Since(start)
 	fmt.Printf("Search time: %s\n", elapsed)

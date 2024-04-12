@@ -273,6 +273,11 @@ func (adQuery *AdQuery) Pipeline() mongo.Pipeline {
 		pipeline = append(pipeline, bson.D{{"$limit", adQuery.Limit}})
 	}
 
+	pipeline = append(pipeline, bson.D{{"$project", bson.D{
+		{"title", 1},
+		{"enda_at", 1},
+	}}})
+
 	sort := bson.D{{"end_at", -1}}
 	pipeline = append(pipeline, bson.D{{"$sort", sort}})
 	return pipeline
