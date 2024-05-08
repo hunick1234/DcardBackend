@@ -87,6 +87,8 @@ func useRouter(m *MyMux, r *http.Request) http.Handler {
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
 	log.Println("-->", r.Method, r.URL.Path)
 	if r.RequestURI == "*" {
 		if r.ProtoAtLeast(1, 1) {
@@ -95,6 +97,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
+	start := time.Now()
 	if name, found := strings.CutPrefix(r.URL.Path, "/debug/pprof/"); found {
 		if name != "" && !(name == "cmdline" || name == "profile" || name == "symbol" || name == "trace") {
 			pprof.Index(w, r)
@@ -107,8 +110,11 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
+	log.Println("use root request took", time.Since(start))
 
+	start = time.Now()
 	handler.ServeHTTP(w, r)
+	log.Printf("request took %s", time.Since(start))
 }
 
 func (s *Server) Start() {
